@@ -37,4 +37,4 @@ runs:
     - shell: bash
       env:
         GITHUB_TOKEN: ${{ inputs.token }}
-      run: depot -v --config-file=${{ inputs.config-file }} --license-file=${{ license-file }} --cache-files=${{ cache-file }} ${{ inputs.flags }} ${{ inputs.command }}
+      run: depot -v --config-file=${{ inputs.config-file }} --license-file=${{ inputs.license-file }} --cache-files=${{ inputs.cache-file }} ${{ inputs.flags }} ${{ inputs.command }}
