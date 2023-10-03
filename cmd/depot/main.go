@@ -1,12 +1,14 @@
 package main
 
 import (
-	"depot/internal/deps"
-	"depot/internal/depsdev"
 	"fmt"
+	"github.com/modfin/depot"
+	"github.com/modfin/depot/internal/deps"
+	"github.com/modfin/depot/internal/depsdev"
 	"github.com/modfin/henry/slicez"
 	log "github.com/sirupsen/logrus"
 	"github.com/urfave/cli/v2"
+	"gopkg.in/yaml.v3"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -18,6 +20,7 @@ func main() {
 	log.SetLevel(log.ErrorLevel)
 
 	var cache *deps.Cache
+	var config depot.Config
 
 	app := &cli.App{
 		Name:  "depot",
@@ -30,7 +33,11 @@ func main() {
 			},
 			&cli.StringFlag{
 				Name:  "license-file",
-				Value: "DEPENDENCIES_LICENSE",
+				Value: "DEP_LICENSES",
+			},
+			&cli.StringFlag{
+				Name:  "config-file",
+				Value: ".depot.yml",
 			},
 
 			&cli.StringFlag{
@@ -68,6 +75,16 @@ func main() {
 				return err
 			}
 
+			configFile := filepath.Join(root, c.String("config-file"))
+			touch(configFile)
+			b, err := os.ReadFile(configFile)
+			if err != nil {
+				return err
+			}
+			err = yaml.Unmarshal(b, &config)
+			if err != nil {
+				return err
+			}
 			return nil
 		},
 		After: func(context *cli.Context) error {
@@ -91,6 +108,7 @@ func main() {
 						}
 						allDeps = append(allDeps, d...)
 					}
+					allDeps = fixDeps(config, allDeps)
 
 					l := deps.ToLicense(c.String("root"), allDeps)
 
@@ -115,6 +133,7 @@ func main() {
 						}
 						allDeps = append(allDeps, d...)
 					}
+					allDeps = fixDeps(config, allDeps)
 
 					l := deps.ToLicense(c.String("root"), allDeps)
 
@@ -128,7 +147,6 @@ func main() {
 				Name: "lint",
 				Action: func(c *cli.Context) error {
 					files := depFiles(c)
-
 					p := deps.New(cache)
 
 					var allDeps []deps.Dep
@@ -140,10 +158,25 @@ func main() {
 						}
 						allDeps = append(allDeps, d...)
 					}
+					allDeps = fixDeps(config, allDeps)
 
-					l := deps.ToLicense(c.String("root"), allDeps)
+					failingDeps := slicez.Filter(allDeps, func(d deps.Dep) bool {
+						return slicez.ContainsFunc(d.License, func(e string) bool {
+							return strings.HasPrefix(e, "~")
+						})
+					})
+					failingDeps = slicez.SortFunc(failingDeps, func(a, b deps.Dep) bool {
+						return a.Key() < b.Key()
+					})
 
-					fmt.Println(l.String())
+					if len(failingDeps) > 0 {
+						log.Error("There are dependencies with unclear license, address them in .depot.yml")
+						log.Error("Failing dependencies are:")
+						for _, d := range failingDeps {
+							log.Errorf("- %s %s %s", d.Type, d.Name, d.Version)
+						}
+						os.Exit(1)
+					}
 
 					return nil
 				},
@@ -154,6 +187,34 @@ func main() {
 	if err := app.Run(os.Args); err != nil {
 		log.Fatal(err)
 	}
+}
+
+func fixDeps(config depot.Config, ds []deps.Dep) []deps.Dep {
+
+	var n []deps.Dep
+
+	for _, d := range ds {
+
+		_, found := slicez.Find(config.Dependency.Ignore, func(e depot.Dependency) bool {
+			return e.Type == string(d.Type) && e.Name == d.Name && (d.Version == e.Version || e.Version == "*" || e.Version == "")
+		})
+
+		if found {
+			continue
+		}
+
+		match, found := slicez.Find(config.Dependency.Licenses, func(e depot.Dependency) bool {
+			return e.Type == string(d.Type) && e.Name == d.Name && (d.Version == e.Version || e.Version == "*" || e.Version == "")
+		})
+
+		if found {
+			d.License = match.License
+		}
+		n = append(n, d)
+
+	}
+	return n
+
 }
 
 func depFiles(c *cli.Context) []string {

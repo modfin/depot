@@ -1,0 +1,40 @@
+
+name: Depot Dependency
+description: A license tool to check dependencies' licenses.
+inputs:
+  config-file:
+    description: The configuration file, for example, ".depot.yml"
+    required: false
+    default: .depot.yml
+  cache-file:
+    description: The cache file for license
+    required: false
+    default: .depot.cache.json
+  license-file:
+    description: The output file for the `save` command
+    required: false
+    default: DEP_LICENSES
+  command:
+    description: |
+      Which mode License Eye should be run in. Choices are `print`, `lint` or `save`. The
+      default value is `save`.
+    required: false
+    default: save
+  flags:
+    description: |
+      Extra flags appended to the command, for example, --summary=path/to/template.tmpl
+    required: false
+runs:
+  using: "composite"
+  steps:
+    - name: Set up Go 1.20
+      uses: actions/setup-go@v4
+      with:
+        go-version: 1.20
+        cache-dependency-path: ${{ github.action_path }}/go.sum
+    - shell: bash
+      run: go build -o /usr/local/bin/depot cmd/depot/main.go
+    - shell: bash
+      env:
+        GITHUB_TOKEN: ${{ inputs.token }}
+      run: depot -v --config-file=${{ inputs.config-file }} --license-file=${{ license-file }} --cache-files=${{ cache-file }} ${{ inputs.flags }} ${{ inputs.command }}

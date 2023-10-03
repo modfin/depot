@@ -1,7 +1,6 @@
 package depot
 
 import (
-	"depot/internal/depsdev"
 	"fmt"
 	"github.com/modfin/henry/mapz"
 	"github.com/modfin/henry/slicez"
@@ -11,9 +10,9 @@ import (
 type SPDX string
 type FileName string
 
-type License map[SPDX]map[FileName][]string
+type LicenseStructure map[SPDX]map[FileName][]string
 
-func (license License) String() string {
+func (license LicenseStructure) String() string {
 
 	var header string
 	var body string
@@ -30,23 +29,28 @@ func (license License) String() string {
 			ss = strings.ReplaceAll(ss, ")", " )")
 			links := slicez.Map(strings.Split(ss, " "), func(a string) string {
 				switch a {
-				case "AND", "OR", "WITH", ")", "(":
+				case "AND", "OR":
+					return "\n " + a
+				case "WITH":
+					return "\n  " + a
+				case "(", ")":
 					return a
 				}
-
 				return fmt.Sprintf("https://spdx.org/licenses/%s.html", a)
 			})
 
-			link = fmt.Sprintf("  //  %s", strings.Join(links, " "))
+			link = fmt.Sprintf("\n %s", strings.Join(links, " "))
 		}
 
-		body += fmt.Sprintf("[%s]%s\n\n", spdx, link)
+		body += fmt.Sprintf("========================================================================\n")
+		body += fmt.Sprintf("%s%s\n", spdx, link)
+		body += fmt.Sprintf("========================================================================\n\n")
 
 		var countDirect int
 		var countIndirect int
 		files := slicez.Sort(mapz.Keys(license[spdx]))
 		for _, file := range files {
-			body += fmt.Sprintf(" [[%s]]\n", file)
+			body += fmt.Sprintf(" [%s]\n", file)
 
 			deps := slicez.Sort(license[spdx][file])
 			for _, dep := range deps {
@@ -68,14 +72,20 @@ func (license License) String() string {
 
 		header += fmt.Sprintf("%s: %d\n", spdx, countDirect+countIndirect)
 
-		body += "\n"
 	}
 	return "---\n" + header + "---\n" + body
 }
 
-type LicenseCache struct {
-	Type    depsdev.DepType
-	Name    string
-	Version string
-	License []string
+type Config struct {
+	Dependency struct {
+		Ignore   []Dependency `yaml:"ignore"`
+		Licenses []Dependency `yaml:"licenses"`
+	} `yaml:"dependency"`
+}
+
+type Dependency struct {
+	Type    string   `yaml:"type"`
+	Name    string   `yaml:"name"`
+	Version string   `yaml:"version"`
+	License []string `yaml:"license"`
 }

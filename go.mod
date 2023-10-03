@@ -1,4 +1,4 @@
-module depot
+module github.com/modfin/depot
 
 go 1.20
 
@@ -10,6 +10,7 @@ require (
 	github.com/urfave/cli/v2 v2.25.7
 	golang.org/x/exp v0.0.0-20220407100705-7b9b53b0aca4
 	golang.org/x/mod v0.12.0
+	gopkg.in/yaml.v3 v3.0.1
 )
 
 require (

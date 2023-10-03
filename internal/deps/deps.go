@@ -1,15 +1,15 @@
 package deps
 
 import (
-	"depot"
-	"depot/internal/deps/cargo"
-	"depot/internal/deps/pom"
-	"depot/internal/depsdev"
 	"encoding/json"
 	"encoding/xml"
 	"fmt"
 	"github.com/BurntSushi/toml"
 	"github.com/aquasecurity/go-dep-parser/pkg/nodejs/npm"
+	"github.com/modfin/depot"
+	"github.com/modfin/depot/internal/deps/cargo"
+	"github.com/modfin/depot/internal/deps/pom"
+	"github.com/modfin/depot/internal/depsdev"
 	"github.com/modfin/henry/exp/containerz/set"
 	"github.com/modfin/henry/mapz"
 	"github.com/modfin/henry/slicez"
@@ -30,8 +30,8 @@ type Processor struct {
 	cache *Cache
 }
 
-func ToLicense(rootdir string, deps []Dep) depot.License {
-	root := depot.License{}
+func ToLicense(rootdir string, deps []Dep) depot.LicenseStructure {
+	root := depot.LicenseStructure{}
 	for _, d := range deps {
 
 		name := fmt.Sprintf("%s %s", d.Name, d.Version)
@@ -156,6 +156,10 @@ func (pro *Processor) FromCargo(lockFilePath string) (deps []Dep, err error) {
 
 	for _, d := range lockfile.Packages {
 
+		if d.Name == p.Name {
+			continue
+		}
+
 		l, _ := pro.LicensesOf(depsdev.CARGO, d.Name, d.Version)
 
 		deps = append(deps, Dep{
@@ -242,17 +246,24 @@ func (pro *Processor) FromMaven(path string) (deps []Dep, err error) {
 
 func (pro *Processor) LicensesOf(depType depsdev.DepType, name string, version string) ([]string, error) {
 	key := DepKey(depType, name, version)
-	dep, found := pro.cache.Get(key)
 
-	if found {
-		log.Infof("deps.dev; licence cache hit for %s", dep.Key())
-		return dep.License, nil
+	if pro.cache != nil {
+		dep, found := pro.cache.Get(key)
+
+		if found {
+			log.Infof("deps.dev; licence cache hit for %s", dep.Key())
+			return dep.License, nil
+		}
 	}
 
 	log.Infof("deps.dev; requesting %s", DepKey(depType, name, version))
 	v, err := depsdev.New().Version(depType, name, version)
+
+	if err != nil && err.Error() == "http status 404" {
+		err = nil
+	}
 	if err != nil {
-		return nil, err
+		log.WithError(err).Fatalf("could not retrive dep %s %s %s", depType, name, version)
 	}
 
 	license := slicez.Map(v.Licenses, func(a string) string {
@@ -266,12 +277,14 @@ func (pro *Processor) LicensesOf(depType depsdev.DepType, name string, version s
 		license = []string{"~unknown"}
 	}
 
-	pro.cache.Put(Dep{
-		Type:    depType,
-		Name:    name,
-		Version: version,
-		License: license,
-	})
+	if pro.cache != nil {
+		pro.cache.Put(Dep{
+			Type:    depType,
+			Name:    name,
+			Version: version,
+			License: license,
+		})
+	}
 
 	return license, err
 }

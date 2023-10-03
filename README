@@ -1,0 +1,16 @@
+
+
+dependency:
+  ignore:
+    - type: go
+      name: github.com/goftp/file-driver
+      version: "*"
+    - type: go
+      name: github.com/modfin/epoxy
+
+  licenses:
+    - type: go
+      name: github.com/goodsign/monday
+      version: v1.0.0
+      license: [BSD-2-Clause]
+

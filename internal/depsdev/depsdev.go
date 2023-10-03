@@ -44,6 +44,11 @@ func (c *Client) Version(depType DepType, name string, version string) (Version,
 		return v, err
 	}
 	defer res.Body.Close()
+
+	if res.StatusCode > 299 {
+		return v, fmt.Errorf("http status %d", res.StatusCode)
+	}
+
 	err = json.NewDecoder(res.Body).Decode(&v)
 	return v, err
 }
