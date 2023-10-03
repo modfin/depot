@@ -94,6 +94,9 @@ func main() {
 		Commands: []*cli.Command{
 			{
 				Name: "print",
+				Flags: []cli.Flag{
+					&cli.BoolFlag{Name: "lint"},
+				},
 				Action: func(c *cli.Context) error {
 					files := depFiles(c)
 
@@ -114,11 +117,17 @@ func main() {
 
 					fmt.Println(l.String())
 
+					if c.Bool("lint") {
+						lint(allDeps)
+					}
 					return nil
 				},
 			},
 			{
 				Name: "save",
+				Flags: []cli.Flag{
+					&cli.BoolFlag{Name: "lint"},
+				},
 				Action: func(c *cli.Context) error {
 					files := depFiles(c)
 
@@ -140,7 +149,15 @@ func main() {
 					rootdir := c.String("root")
 					outname := c.String("license-file")
 
-					return os.WriteFile(filepath.Join(rootdir, outname), []byte(l.String()), 0644)
+					err := os.WriteFile(filepath.Join(rootdir, outname), []byte(l.String()), 0644)
+					if err != nil {
+						return err
+					}
+
+					if c.Bool("lint") {
+						lint(allDeps)
+					}
+					return nil
 				},
 			},
 			{
@@ -159,25 +176,7 @@ func main() {
 						allDeps = append(allDeps, d...)
 					}
 					allDeps = fixDeps(config, allDeps)
-
-					failingDeps := slicez.Filter(allDeps, func(d deps.Dep) bool {
-						return slicez.ContainsFunc(d.License, func(e string) bool {
-							return strings.HasPrefix(e, "~")
-						})
-					})
-					failingDeps = slicez.SortFunc(failingDeps, func(a, b deps.Dep) bool {
-						return a.Key() < b.Key()
-					})
-
-					if len(failingDeps) > 0 {
-						log.Error("There are dependencies with unclear license, address them in .depot.yml")
-						log.Error("Failing dependencies are:")
-						for _, d := range failingDeps {
-							log.Errorf("- %s %s %s", d.Type, d.Name, d.Version)
-						}
-						os.Exit(1)
-					}
-
+					lint(allDeps)
 					return nil
 				},
 			},
@@ -186,6 +185,27 @@ func main() {
 
 	if err := app.Run(os.Args); err != nil {
 		log.Fatal(err)
+	}
+}
+
+func lint(allDeps []deps.Dep) {
+
+	failingDeps := slicez.Filter(allDeps, func(d deps.Dep) bool {
+		return slicez.ContainsFunc(d.License, func(e string) bool {
+			return strings.HasPrefix(e, "~")
+		})
+	})
+	failingDeps = slicez.SortFunc(failingDeps, func(a, b deps.Dep) bool {
+		return a.Key() < b.Key()
+	})
+
+	if len(failingDeps) > 0 {
+		log.Error("There are dependencies with unclear license, address them in .depot.yml")
+		log.Error("Failing dependencies are:")
+		for _, d := range failingDeps {
+			log.Errorf("- %s %s %s", d.Type, d.Name, d.Version)
+		}
+		os.Exit(1)
 	}
 }
 
