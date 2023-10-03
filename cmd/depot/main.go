@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"github.com/modfin/depot"
 	"github.com/modfin/depot/internal/deps"
@@ -118,7 +119,7 @@ func main() {
 					fmt.Println(l.String())
 
 					if c.Bool("lint") {
-						lint(allDeps)
+						return lint(allDeps)
 					}
 					return nil
 				},
@@ -155,7 +156,7 @@ func main() {
 					}
 
 					if c.Bool("lint") {
-						lint(allDeps)
+						return lint(allDeps)
 					}
 					return nil
 				},
@@ -176,19 +177,19 @@ func main() {
 						allDeps = append(allDeps, d...)
 					}
 					allDeps = fixDeps(config, allDeps)
-					lint(allDeps)
-					return nil
+					return lint(allDeps)
 				},
 			},
 		},
 	}
 
 	if err := app.Run(os.Args); err != nil {
-		log.Fatal(err)
+		log.Error(err)
+		os.Exit(1)
 	}
 }
 
-func lint(allDeps []deps.Dep) {
+func lint(allDeps []deps.Dep) error {
 
 	failingDeps := slicez.Filter(allDeps, func(d deps.Dep) bool {
 		return slicez.ContainsFunc(d.License, func(e string) bool {
@@ -205,8 +206,9 @@ func lint(allDeps []deps.Dep) {
 		for _, d := range failingDeps {
 			log.Errorf("- %s %s %s", d.Type, d.Name, d.Version)
 		}
-		os.Exit(1)
+		return errors.New("failed lint")
 	}
+	return nil
 }
 
 func fixDeps(config depot.Config, ds []deps.Dep) []deps.Dep {
