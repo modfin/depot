@@ -33,6 +33,10 @@ runs:
         go-version: 1.20
         cache-dependency-path: ${{ github.action_path }}/go.sum
     - shell: bash
+      run: ls
+    - shell: bash
+      run: ls ./cmd
+    - shell: bash
       run: ls ./cmd/depot
     - shell: bash
       run: cd $GITHUB_ACTION_PATH && go build -o /usr/local/bin/depot ./cmd/depot/main.go
