@@ -13,7 +13,7 @@ inputs:
   license-file:
     description: The output file for the `save` command
     required: false
-    default: DEP_LICENSES
+    default: LICENSES_DEP
   command:
     description: |
       Which mode License Eye should be run in. Choices are `print`, `lint` or `save`. The

@@ -33,7 +33,7 @@ func main() {
 			},
 			&cli.StringFlag{
 				Name:  "license-file",
-				Value: "DEP_LICENSES",
+				Value: "LICENSES_DEP",
 			},
 			&cli.StringFlag{
 				Name:  "config-file",
