@@ -33,8 +33,8 @@ runs:
         go-version: '>=1.20.0'
         cache-dependency-path: ${{ github.action_path }}/go.sum
     - shell: bash
-      run: go install github.com/modfin/depot/cmd/depot@latest
+      run: go install github.com/modfin/depot/cmd/depot@v0.0.2
     - shell: bash
       env:
         GITHUB_TOKEN: ${{ inputs.token }}
-      run: depot -v --config-file=${{ inputs.config-file }} --license-file=${{ inputs.license-file }} --cache-file=${{ inputs.cache-file }} ${{ inputs.flags }} ${{ inputs.command }}
+      run: depot --config-file=${{ inputs.config-file }} --license-file=${{ inputs.license-file }} --cache-file=${{ inputs.cache-file }} ${{ inputs.flags }} ${{ inputs.command }}
