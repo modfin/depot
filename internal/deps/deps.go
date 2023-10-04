@@ -118,11 +118,27 @@ func (pro *Processor) FromNPM(path string) (deps []Dep, err error) {
 
 	direct := set.From(mapz.Keys(lockfile.Packages[""].Dependencies)...)
 
-	for name, d := range lockfile.Dependencies {
+	merged := mapz.Merge(mapz.Remap(lockfile.Packages, func(name string, v npm.Package) (string, npm.Dependency) {
+		name = slicez.Nth(strings.Split(name, "node_modules/"), -1)
+		return name, npm.Dependency{
+			Version: v.Version,
+			Dev:     v.Dev,
+			//Dependencies: v.Dependencies,
+			//Resolved:     v.Resolved,
+			//StartLine:    v.StartLine,
+			//EndLine:      v.EndLine,
+		}
+	}), lockfile.Dependencies)
+
+	for name, d := range merged {
+		if name == "" { // self...
+			continue
+		}
 		// Ignore dev deps
 		if d.Dev {
 			continue
 		}
+		name = slicez.Nth(strings.Split(name, "node_modules/"), -1)
 
 		l, _ := pro.LicensesOf(depsdev.NPM, name, d.Version)
 
