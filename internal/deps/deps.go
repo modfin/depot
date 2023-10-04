@@ -151,7 +151,9 @@ func (pro *Processor) FromNPM(path string) (deps []Dep, err error) {
 			License:  l,
 		})
 	}
-	return deps, nil
+	return slicez.UniqBy(deps, func(a Dep) string {
+		return a.Key()
+	}), nil
 }
 
 func (pro *Processor) FromCargo(lockFilePath string) (deps []Dep, err error) {
