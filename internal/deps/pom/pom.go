@@ -11,17 +11,25 @@ import (
 	"reflect"
 	"regexp"
 	"strings"
-
-	"github.com/aquasecurity/go-dep-parser/pkg/utils"
 )
 
 type POM struct {
 	Content *PomXML
 }
 
+func mergeMaps(parent, child map[string]string) map[string]string {
+	if parent == nil {
+		return child
+	}
+	for k, v := range child {
+		parent[k] = v
+	}
+	return parent
+}
+
 func (p POM) Properties() Properties {
 	props := p.Content.Properties
-	return utils.MergeMaps(props, p.ProjectProperties())
+	return mergeMaps(props, p.ProjectProperties())
 }
 
 func (p POM) ProjectProperties() map[string]string {

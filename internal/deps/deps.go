@@ -5,7 +5,8 @@ import (
 	"encoding/xml"
 	"fmt"
 	"github.com/BurntSushi/toml"
-	"github.com/aquasecurity/go-dep-parser/pkg/nodejs/npm"
+	"github.com/modfin/depot/internal/deps/npm"
+
 	"github.com/modfin/depot"
 	"github.com/modfin/depot/internal/deps/cargo"
 	"github.com/modfin/depot/internal/deps/pom"
