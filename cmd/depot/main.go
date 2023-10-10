@@ -3,6 +3,7 @@ package main
 import (
 	"errors"
 	"fmt"
+	"github.com/google/go-cmp/cmp"
 	"github.com/modfin/depot"
 	"github.com/modfin/depot/internal/deps"
 	"github.com/modfin/depot/internal/depsdev"
@@ -163,6 +164,9 @@ func main() {
 			},
 			{
 				Name: "lint",
+				Flags: []cli.Flag{
+					&cli.BoolFlag{Name: "verify", Usage: "Verify against existing --license-file, and fail on unsaved dependency or version changes"},
+				},
 				Action: func(c *cli.Context) error {
 					files := depFiles(c)
 					p := deps.New(cache)
@@ -177,7 +181,14 @@ func main() {
 						allDeps = append(allDeps, d...)
 					}
 					allDeps = fixDeps(config, allDeps)
-					return lint(allDeps)
+					err := lint(allDeps)
+					if err != nil {
+						return err
+					}
+					if c.Bool("verify") {
+						return verifyNewDeps(c, allDeps)
+					}
+					return nil
 				},
 			},
 		},
@@ -207,6 +218,24 @@ func lint(allDeps []deps.Dep) error {
 			log.Errorf("- %s %s %s", d.Type, d.Name, d.Version)
 		}
 		return errors.New("failed lint")
+	}
+	return nil
+}
+
+func verifyNewDeps(c *cli.Context, allDeps []deps.Dep) error {
+	newLicenseStructure := deps.ToLicense(c.String("root"), allDeps).String()
+	b, err := os.ReadFile(c.String("license-file"))
+	if err != nil {
+		log.WithError(err).Errorf("could not read existing license-file: '%s', run 'save' to generate file", c.String("license-file"))
+		return err
+	}
+	existingLicenseStructure := string(b)
+	if newLicenseStructure != existingLicenseStructure {
+		log.Error("There are new changes to be persisted due to dependency changes:")
+		diff := cmp.Diff(existingLicenseStructure, newLicenseStructure)
+		fmt.Println(diff)
+		err = errors.New("failed to verify against local source - run save command")
+		return err
 	}
 	return nil
 }
