@@ -14,6 +14,8 @@ const GO DepType = "go"
 const MAVEN DepType = "maven"
 const CARGO DepType = "cargo"
 
+const PYPI DepType = "pypi"
+
 type Client struct {
 	uri string
 }

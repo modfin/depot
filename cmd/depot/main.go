@@ -308,7 +308,10 @@ func findDepFiles(root string, recurse bool, types []string) []string {
 			t = string(depsdev.MAVEN)
 		case "cargo.lock":
 			t = string(depsdev.CARGO)
+		case "requirements.txt":
+			t = string(depsdev.PYPI)
 		}
+
 		if t != "" {
 			if len(types) == 0 || slicez.Contains(types, t) {
 				files = append(files, path)
