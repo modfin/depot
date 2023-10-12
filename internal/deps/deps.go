@@ -1,14 +1,14 @@
 package deps
 
 import (
+	"bufio"
 	"encoding/json"
 	"encoding/xml"
 	"fmt"
 	"github.com/BurntSushi/toml"
-	"github.com/modfin/depot/internal/deps/npm"
-
 	"github.com/modfin/depot"
 	"github.com/modfin/depot/internal/deps/cargo"
+	"github.com/modfin/depot/internal/deps/npm"
 	"github.com/modfin/depot/internal/deps/pom"
 	"github.com/modfin/depot/internal/depsdev"
 	"github.com/modfin/henry/exp/containerz/set"
@@ -19,6 +19,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"unicode"
 )
 
 func New(cache *Cache) *Processor {
@@ -84,7 +85,10 @@ func (pro *Processor) FromFile(path string) ([]Dep, error) {
 		return pro.From(path, depsdev.MAVEN)
 	case "cargo.lock":
 		return pro.From(path, depsdev.CARGO)
+	case "requirements.txt":
+		return pro.From(path, depsdev.PYPI)
 	}
+
 	return nil, fmt.Errorf("could not find any dep type associated with file name %s", filename)
 
 }
@@ -99,6 +103,8 @@ func (pro *Processor) From(file string, _type depsdev.DepType) ([]Dep, error) {
 		return pro.FromMaven(file)
 	case depsdev.CARGO:
 		return pro.FromCargo(file)
+	case depsdev.PYPI:
+		return pro.FromPypi(file)
 	}
 
 	return nil, fmt.Errorf("type %s does not exist", _type)
@@ -260,6 +266,63 @@ func (pro *Processor) FromMaven(path string) (deps []Dep, err error) {
 			License:  l,
 		})
 	}
+	return deps, nil
+}
+func (pro *Processor) FromPypi(path string) (deps []Dep, err error) {
+
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+
+	scanner := bufio.NewScanner(f)
+
+	rStripByKey := func(line string, key string) string {
+		if pos := strings.Index(line, key); pos >= 0 {
+			line = strings.TrimRightFunc((line)[:pos], unicode.IsSpace)
+		}
+		return line
+	}
+
+	removeExtras := func(line string) string {
+		startIndex := strings.Index(line, "[")
+		endIndex := strings.Index(line, "]") + 1
+		if startIndex != -1 && endIndex != -1 {
+			line = line[:startIndex] + line[endIndex:]
+		}
+		return line
+	}
+
+	for scanner.Scan() {
+		line := scanner.Text()
+		line = strings.ReplaceAll(line, " ", "")
+		line = strings.ReplaceAll(line, `\`, "")
+		line = removeExtras(line)
+		line = rStripByKey(line, "#")
+		line = rStripByKey(line, ";")
+		line = rStripByKey(line, "--")
+		s := strings.Split(line, "==")
+		if len(s) != 2 {
+			continue
+		}
+
+		name := s[0]
+		version := s[1]
+
+		licence, _ := pro.LicensesOf(depsdev.PYPI, name, version)
+		deps = append(deps, Dep{
+			Context:  path,
+			Type:     depsdev.PYPI,
+			Name:     name,
+			Version:  version,
+			Indirect: false,
+			License:  licence,
+		})
+	}
+	if err := scanner.Err(); err != nil {
+		return nil, err
+	}
+
 	return deps, nil
 }
 
