@@ -124,9 +124,21 @@ func (pro *Processor) FromNPM(path string) (deps []Dep, err error) {
 
 	direct := set.From(mapz.Keys(lockfile.Packages[""].Dependencies)...)
 
-	merged := mapz.Merge(mapz.Remap(lockfile.Packages, func(name string, v npm.Package) (string, npm.Dependency) {
-		name = slicez.Nth(strings.Split(name, "node_modules/"), -1)
-		return name, npm.Dependency{
+	seen := map[string]string{}
+
+	for _, name := range mapz.Keys(lockfile.Packages) {
+		canonical := slicez.Nth(strings.Split(name, "node_modules/"), -1)
+		if seen[canonical] == "" {
+			seen[canonical] = name
+		}
+		if len(name) < len(seen[canonical]) {
+			seen[canonical] = name
+		}
+	}
+
+	merged := mapz.Merge(mapz.Remap(seen, func(canonical, name string) (string, npm.Dependency) {
+		v := lockfile.Packages[name]
+		return canonical, npm.Dependency{
 			Version: v.Version,
 			Dev:     v.Dev,
 			//Dependencies: v.Dependencies,
