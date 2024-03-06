@@ -201,7 +201,7 @@ func (pro *Processor) FromCargo(lockFilePath string) (deps []Dep, err error) {
 
 		deps = append(deps, Dep{
 			Context:  lockFilePath,
-			Type:     depsdev.NPM,
+			Type:     depsdev.CARGO,
 			Name:     d.Name,
 			Version:  d.Version,
 			Indirect: !direct.Exists(d.Name),
