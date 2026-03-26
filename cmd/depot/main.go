@@ -3,6 +3,11 @@ package main
 import (
 	"errors"
 	"fmt"
+	"io/fs"
+	"os"
+	"path/filepath"
+	"strings"
+
 	"github.com/google/go-cmp/cmp"
 	"github.com/modfin/depot"
 	"github.com/modfin/depot/internal/deps"
@@ -11,10 +16,6 @@ import (
 	log "github.com/sirupsen/logrus"
 	"github.com/urfave/cli/v2"
 	"gopkg.in/yaml.v3"
-	"io/fs"
-	"os"
-	"path/filepath"
-	"strings"
 )
 
 func main() {
@@ -53,7 +54,7 @@ func main() {
 			},
 			&cli.StringSliceFlag{
 				Name:        "type",
-				Usage:       "Type of dep files we are looking for, go, npm, maven, cargo",
+				Usage:       "Type of dep files we are looking for, go, npm, pnpm, maven, cargo",
 				DefaultText: "All",
 				Aliases:     []string{"t"},
 			},
@@ -300,7 +301,7 @@ func findDepFiles(root string, recurse bool, types []string) []string {
 
 		var t string
 		switch strings.ToLower(base) {
-		case "package-lock.json":
+		case "package-lock.json", "pnpm-lock.yaml":
 			t = string(depsdev.NPM)
 		case "go.mod":
 			t = string(depsdev.GO)

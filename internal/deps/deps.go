@@ -5,10 +5,16 @@ import (
 	"encoding/json"
 	"encoding/xml"
 	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
+	"unicode"
+
 	"github.com/BurntSushi/toml"
 	"github.com/modfin/depot"
 	"github.com/modfin/depot/internal/deps/cargo"
 	"github.com/modfin/depot/internal/deps/npm"
+	"github.com/modfin/depot/internal/deps/pnpm"
 	"github.com/modfin/depot/internal/deps/pom"
 	"github.com/modfin/depot/internal/depsdev"
 	"github.com/modfin/henry/exp/containerz/set"
@@ -16,10 +22,7 @@ import (
 	"github.com/modfin/henry/slicez"
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/mod/modfile"
-	"os"
-	"path/filepath"
-	"strings"
-	"unicode"
+	"gopkg.in/yaml.v3"
 )
 
 func New(cache *Cache) *Processor {
@@ -79,6 +82,8 @@ func (pro *Processor) FromFile(path string) ([]Dep, error) {
 	switch strings.ToLower(filename) {
 	case "package-lock.json":
 		return pro.From(path, depsdev.NPM)
+	case "pnpm-lock.yaml":
+		return pro.FromPNPM(path)
 	case "go.mod":
 		return pro.From(path, depsdev.GO)
 	case "pom.xml":
@@ -165,6 +170,64 @@ func (pro *Processor) FromNPM(path string) (deps []Dep, err error) {
 			Type:     depsdev.NPM,
 			Name:     name,
 			Version:  d.Version,
+			Indirect: !direct.Exists(name),
+			License:  l,
+		})
+	}
+	return slicez.UniqBy(deps, func(a Dep) string {
+		return a.Key()
+	}), nil
+}
+
+func (pro *Processor) FromPNPM(path string) ([]Dep, error) {
+	b, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	var lockfile pnpm.LockFile
+	if err = yaml.Unmarshal(b, &lockfile); err != nil {
+		return nil, err
+	}
+
+	// Collect direct prod and dev dependency names so we can:
+	//   - mark packages as direct vs indirect
+	//   - skip dev-only packages (those that are dev deps but not prod deps)
+	var directSlice, devSlice []string
+	if rootImporter, ok := lockfile.Importers["."]; ok {
+		// v9: dependency info lives under importers
+		directSlice = mapz.Keys(rootImporter.Dependencies)
+		devSlice = mapz.Keys(rootImporter.DevDependencies)
+	} else {
+		// v5/v6: dependency info is at the top level
+		directSlice = mapz.Keys(lockfile.Dependencies)
+		devSlice = mapz.Keys(lockfile.DevDependencies)
+	}
+	direct := set.From(directSlice...)
+	devOnly := set.From(slicez.Filter(devSlice, func(name string) bool {
+		return !direct.Exists(name)
+	})...)
+
+	var deps []Dep
+	for key, entry := range lockfile.Packages {
+		name, version := pnpm.ParsePackageKey(key)
+		if version == "" {
+			continue
+		}
+		// v5/v6: skip packages explicitly marked as dev
+		if entry.Dev {
+			continue
+		}
+		// v9: skip packages that are only direct dev deps (not prod deps)
+		if devOnly.Exists(name) {
+			continue
+		}
+
+		l, _ := pro.LicensesOf(depsdev.NPM, name, version)
+		deps = append(deps, Dep{
+			Context:  path,
+			Type:     depsdev.NPM,
+			Name:     name,
+			Version:  version,
 			Indirect: !direct.Exists(name),
 			License:  l,
 		})
