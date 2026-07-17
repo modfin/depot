@@ -12,6 +12,7 @@ import (
 	"github.com/modfin/depot"
 	"github.com/modfin/depot/internal/deps"
 	"github.com/modfin/depot/internal/depsdev"
+	"github.com/modfin/depot/internal/gitignore"
 	"github.com/modfin/henry/slicez"
 	log "github.com/sirupsen/logrus"
 	"github.com/urfave/cli/v2"
@@ -57,6 +58,10 @@ func main() {
 				Usage:       "Type of dep files we are looking for, go, npm, pnpm, maven, cargo",
 				DefaultText: "All",
 				Aliases:     []string{"t"},
+			},
+			&cli.BoolFlag{
+				Name:  "no-gitignore",
+				Usage: "Do not respect .gitignore files when searching for dep files",
 			},
 			&cli.BoolFlag{
 				Name:    "verbose",
@@ -275,11 +280,16 @@ func depFiles(c *cli.Context) []string {
 		return c.Args().Slice()
 	}
 
-	return findDepFiles(c.String("root"), c.Bool("recurse"), c.StringSlice("type"))
+	return findDepFiles(c.String("root"), c.Bool("recurse"), c.StringSlice("type"), c.Bool("no-gitignore"))
 }
 
-func findDepFiles(root string, recurse bool, types []string) []string {
+func findDepFiles(root string, recurse bool, types []string, noGitignore bool) []string {
 	var files []string
+
+	var ignores *gitignore.Matcher
+	if !noGitignore {
+		ignores = &gitignore.Matcher{}
+	}
 
 	_ = filepath.Walk(root, func(path string, info fs.FileInfo, err error) error {
 
@@ -287,6 +297,23 @@ func findDepFiles(root string, recurse bool, types []string) []string {
 
 		if path != root && !recurse && info.IsDir() {
 			return filepath.SkipDir
+		}
+
+		if ignores != nil && path != root {
+			rel, err := filepath.Rel(root, path)
+			if err == nil && ignores.Ignored(filepath.ToSlash(rel), info.IsDir()) {
+				if info.IsDir() {
+					return filepath.SkipDir
+				}
+				if depType(base) != "" {
+					log.Info("gitignored, skipping ", path)
+				}
+				return nil
+			}
+		}
+
+		if ignores != nil && info.IsDir() {
+			loadGitignore(ignores, root, path)
 		}
 
 		// ignoring hidden files
@@ -299,20 +326,7 @@ func findDepFiles(root string, recurse bool, types []string) []string {
 			return filepath.SkipDir
 		}
 
-		var t string
-		switch strings.ToLower(base) {
-		case "package-lock.json", "pnpm-lock.yaml":
-			t = string(depsdev.NPM)
-		case "go.mod":
-			t = string(depsdev.GO)
-		case "pom.xml":
-			t = string(depsdev.MAVEN)
-		case "cargo.lock":
-			t = string(depsdev.CARGO)
-		case "requirements.txt":
-			t = string(depsdev.PYPI)
-		}
-
+		t := depType(base)
 		if t != "" {
 			if len(types) == 0 || slicez.Contains(types, t) {
 				files = append(files, path)
@@ -323,6 +337,42 @@ func findDepFiles(root string, recurse bool, types []string) []string {
 	})
 	return files
 
+}
+
+func depType(base string) string {
+	switch strings.ToLower(base) {
+	case "package-lock.json", "pnpm-lock.yaml":
+		return string(depsdev.NPM)
+	case "go.mod":
+		return string(depsdev.GO)
+	case "pom.xml":
+		return string(depsdev.MAVEN)
+	case "cargo.lock":
+		return string(depsdev.CARGO)
+	case "requirements.txt":
+		return string(depsdev.PYPI)
+	}
+	return ""
+}
+
+func loadGitignore(m *gitignore.Matcher, root, dir string) {
+	name := filepath.Join(dir, ".gitignore")
+	b, err := os.ReadFile(name)
+	if os.IsNotExist(err) {
+		return
+	}
+	if err != nil {
+		log.WithError(err).Warn("could not read ", name)
+		return
+	}
+	base, err := filepath.Rel(root, dir)
+	if err != nil {
+		return
+	}
+	if base == "." {
+		base = ""
+	}
+	m.Append(filepath.ToSlash(base), gitignore.Parse(string(b)))
 }
 
 func touch(fileName string) {
