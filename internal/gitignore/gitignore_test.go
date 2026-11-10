@@ -74,7 +74,9 @@ func TestPatternMatch(t *testing.T) {
 			t.Errorf("ParsePattern(%q) not ok", tt.pattern)
 			continue
 		}
-		if got := p.Match(tt.path, tt.isDir); got != tt.want {
+		var m Matcher
+		m.Append("", []Pattern{p})
+		if got := m.Ignored(tt.path, tt.isDir); got != tt.want {
 			t.Errorf("pattern %q path %q isDir %v: got %v, want %v", tt.pattern, tt.path, tt.isDir, got, tt.want)
 		}
 	}
@@ -93,7 +95,7 @@ func TestParsePatternTrimming(t *testing.T) {
 	if !ok {
 		t.Fatal("expected pattern")
 	}
-	if !p.Match("foo", false) {
+	if !p.matchesPath("foo", false) {
 		t.Error("trailing spaces and CR should be trimmed")
 	}
 }
