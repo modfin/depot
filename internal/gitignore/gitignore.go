@@ -57,50 +57,35 @@ func Parse(content string) []Pattern {
 	return ps
 }
 
-// Match reports whether the pattern matches rel, a slash-separated path
-// relative to the directory holding the .gitignore file.
-func (p Pattern) Match(rel string, isDir bool) bool {
-	exact, prefix := matchSegments(p.segments, strings.Split(rel, "/"))
-	if prefix {
-		// matched an ancestor directory, everything under it is matched
-		return true
-	}
-	return exact && (!p.dirOnly || isDir)
-}
-
-// matchesPath is Match without the ancestor rule: rel itself must match.
+// matchesPath reports whether the pattern matches rel itself, a slash-separated
+// path relative to the directory holding the .gitignore file. Paths under a
+// matched directory are left to Matcher.
 func (p Pattern) matchesPath(rel string, isDir bool) bool {
-	exact, _ := matchSegments(p.segments, strings.Split(rel, "/"))
-	return exact && (!p.dirOnly || isDir)
+	return matchSegments(p.segments, strings.Split(rel, "/")) && (!p.dirOnly || isDir)
 }
 
-// matchSegments matches pattern segments against path segments.
-// exact: pattern consumed the whole path.
-// prefix: pattern matched a strict ancestor of the path.
-func matchSegments(pat, segs []string) (exact, prefix bool) {
+// matchSegments reports whether the pattern segments consume the whole path.
+func matchSegments(pat, segs []string) bool {
 	if len(pat) == 0 {
-		return len(segs) == 0, len(segs) > 0
+		return len(segs) == 0
 	}
 	if pat[0] == "**" {
 		if len(pat) == 1 {
 			// trailing ** matches contents, not the dir itself
-			return len(segs) > 0, len(segs) > 1
+			return len(segs) > 0
 		}
 		for i := 0; i <= len(segs); i++ {
-			e, pre := matchSegments(pat[1:], segs[i:])
-			exact = exact || e
-			prefix = prefix || pre
-			if exact && prefix {
-				break
+			if matchSegments(pat[1:], segs[i:]) {
+				return true
 			}
 		}
-		return exact, prefix
+		return false
 	}
 	if len(segs) == 0 {
-		return false, false
+		return false
 	}
 	if ok, err := path.Match(pat[0], segs[0]); err != nil || !ok {
-		return false, false
+		return false
 	}
 	return matchSegments(pat[1:], segs[1:])
 }
