@@ -170,3 +170,21 @@ func TestMatcherUnignoreDirIdiom(t *testing.T) {
 		t.Error("dist/keep/go.mod should be re-included")
 	}
 }
+
+func TestMatcherNegatedParentKeepsChildIgnored(t *testing.T) {
+	var m Matcher
+	m.Append("", Parse("/*\n.terraform/\n!/infra\n"))
+
+	if m.Ignored("infra", true) {
+		t.Error("infra should be re-included")
+	}
+	if m.Ignored("infra/tf/go.mod", false) {
+		t.Error("infra/tf/go.mod should not be ignored")
+	}
+	if !m.Ignored("infra/tf/.terraform", true) {
+		t.Error("re-including infra must not re-include infra/tf/.terraform")
+	}
+	if !m.Ignored("infra/tf/.terraform/modules/go.mod", false) {
+		t.Error("files under an ignored dir stay ignored")
+	}
+}

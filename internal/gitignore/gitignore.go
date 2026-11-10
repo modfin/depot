@@ -68,6 +68,12 @@ func (p Pattern) Match(rel string, isDir bool) bool {
 	return exact && (!p.dirOnly || isDir)
 }
 
+// matchesPath is Match without the ancestor rule: rel itself must match.
+func (p Pattern) matchesPath(rel string, isDir bool) bool {
+	exact, _ := matchSegments(p.segments, strings.Split(rel, "/"))
+	return exact && (!p.dirOnly || isDir)
+}
+
 // matchSegments matches pattern segments against path segments.
 // exact: pattern consumed the whole path.
 // prefix: pattern matched a strict ancestor of the path.
@@ -120,8 +126,22 @@ func (m *Matcher) Append(base string, patterns []Pattern) {
 }
 
 // Ignored reports whether rel, slash-separated and relative to the
-// root, is excluded. The last matching pattern wins.
+// root, is excluded. As in git, a path under an excluded directory is
+// excluded, and otherwise the last pattern matching the path itself
+// wins. So re-including a directory, e.g. !/infra after /*, does not
+// re-include what other patterns exclude inside it.
 func (m *Matcher) Ignored(rel string, isDir bool) bool {
+	segs := strings.Split(rel, "/")
+	for i := 1; i < len(segs); i++ {
+		if m.excluded(strings.Join(segs[:i], "/"), true) {
+			return true
+		}
+	}
+	return m.excluded(rel, isDir)
+}
+
+// excluded applies the last pattern matching rel itself, ignoring its ancestors.
+func (m *Matcher) excluded(rel string, isDir bool) bool {
 	var ignored bool
 	for _, s := range m.scopes {
 		sub, ok := inScope(s.base, rel)
@@ -129,7 +149,7 @@ func (m *Matcher) Ignored(rel string, isDir bool) bool {
 			continue
 		}
 		for _, p := range s.patterns {
-			if p.Match(sub, isDir) {
+			if p.matchesPath(sub, isDir) {
 				ignored = !p.negate
 			}
 		}

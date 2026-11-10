@@ -94,3 +94,15 @@ func TestFindDepFilesGitignoreNegation(t *testing.T) {
 		t.Errorf("got %v, want %v", got, want)
 	}
 }
+
+func TestFindDepFilesGitignoreNegatedParent(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, root, "infra/tf/go.mod")
+	writeFile(t, root, "infra/tf/.terraform/modules/m/go.mod")
+	writeGitignore(t, root, ".gitignore", "/*\n.terraform/\n!/infra\n")
+
+	got := relFiles(t, root, findDepFiles(root, true, nil, false))
+	if want := []string{"infra/tf/go.mod"}; !slices.Equal(got, want) {
+		t.Errorf("got %v, want %v", got, want)
+	}
+}
